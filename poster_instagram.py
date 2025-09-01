@@ -6,7 +6,7 @@ from instagrapi import Client
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import schedule
-from datetime import datetime
+from datetime import datetime, timedelta
 
 USERNAME = os.environ.get("USERNAME")
 PASSWORD = os.environ.get("PASSWORD")
@@ -54,24 +54,36 @@ def create_poster(anime):
 
     draw = ImageDraw.Draw(polaroid_card)
     text_color = (0, 0, 0)
-    font_title_bold = ImageFont.load_default()
-    font_info = ImageFont.load_default()
-    font_info_bold = ImageFont.load_default()
+
+    font_path_bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    font_path_regular = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+    max_title_width = IMAGE_WIDTH
+    title_font_size = 90
+    font_title = ImageFont.truetype(font_path_bold, title_font_size)
+    while font_title.getlength(title) > max_title_width and title_font_size > 40:
+        title_font_size -= 5
+        font_title = ImageFont.truetype(font_path_bold, title_font_size)
+
+    font_info = ImageFont.truetype(font_path_regular, 40)
+    font_info_bold = ImageFont.truetype(font_path_bold, 40)
 
     text_start_y = IMAGE_HEIGHT + (CARD_PADDING * 1.5)
     padding_x = CARD_PADDING
 
-    draw.text((padding_x, text_start_y), title.upper(), font=font_title_bold, fill=text_color)
+    draw.text((padding_x, text_start_y), title, font=font_title, fill=text_color)
     if year:
-        draw.text((padding_x + 10, text_start_y + 10), str(year), font=font_info, fill=text_color)
+        draw.text((padding_x + font_title.getlength(title) + 20,
+                   text_start_y + font_title.size - font_info.size),
+                  str(year), font=font_info, fill=text_color)
 
-    y_pos = text_start_y + 30
-    draw.text((padding_x, y_pos), "genre", font=font_info_bold, fill=text_color)
-    draw.text((padding_x + 60, y_pos), ", ".join(genres), font=font_info, fill=text_color)
+    y_pos = text_start_y + font_title.size + 30
+    draw.text((padding_x, y_pos), "genre:", font=font_info_bold, fill=text_color)
+    draw.text((padding_x + 160, y_pos), ", ".join(genres), font=font_info, fill=text_color)
 
-    y_pos += 20
-    draw.text((padding_x, y_pos), "directed by", font=font_info_bold, fill=text_color)
-    draw.text((padding_x + 100, y_pos), director, font=font_info, fill=text_color)
+    y_pos += font_info.size + 20
+    draw.text((padding_x, y_pos), "directed by:", font=font_info_bold, fill=text_color)
+    draw.text((padding_x + 240, y_pos), director, font=font_info, fill=text_color)
 
     clean_title = "".join([c if c.isalnum() else "_" for c in title])[:30]
     path = os.path.join(IMAGE_DIR, f"{clean_title}_{int(time.time())}.jpg")
@@ -79,7 +91,8 @@ def create_poster(anime):
     return path, title, score
 
 def create_hashtags(title):
-    keywords = ["anime","otaku","manga","japan","weeb","animes","cosplay","otakulife","animesbr","instaanime","animelover"]
+    keywords = ["anime","otaku","manga","japan","weeb","animes","cosplay",
+                "otakulife","animesbr","instaanime","animelover"]
     title_clean = title.replace(" ", "").replace("-", "").replace(":", "")
     hashtags = [f"#{title_clean}", f"#{title_clean}Anime"] + [f"#{k}" for k in random.sample(keywords, 6)]
     return " ".join(hashtags)
@@ -95,24 +108,19 @@ def job():
     except Exception as e:
         print(f"❌ Erro no job: {e}")
 
-def print_next_run():
-    if schedule.get_jobs():
-        next_run = schedule.get_jobs()[0].next_run
-        remaining = next_run - datetime.now()
-        hours, remainder = divmod(remaining.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        print(f"🕒 Próximo post em: {hours}h {minutes}m {seconds}s")
-
+# --- AGENDAR JOB A CADA 6 HORAS ---
 schedule.every(6).hours.do(job)
 
 print(f"🕒 Script iniciado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-job()
+job()  # primeira execução imediata
 
 while True:
-    try:
-        schedule.run_pending()
-        print_next_run()
-        time.sleep(60)
-    except Exception as e:
-        print(f"❌ Erro no loop principal: {e}")
-        time.sleep(60)
+    schedule.run_pending()
+    if schedule.get_jobs():
+        next_run = schedule.get_jobs()[0].next_run
+        remaining = next_run - datetime.now()
+        total_seconds = int(remaining.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"🕒 Próximo post em: {hours:02d}h {minutes:02d}m {seconds:02d}s", end='\r')
+    time.sleep(1)
