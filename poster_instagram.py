@@ -8,14 +8,12 @@ from io import BytesIO
 import schedule
 from datetime import datetime
 
-# --- CONFIGURAÇÕES ---
 USERNAME = os.environ.get("USERNAME")
 PASSWORD = os.environ.get("PASSWORD")
 SESSION_FILE = "session.json"
 IMAGE_DIR = "images"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
-# --- LOGIN ---
 cl = Client()
 if os.path.exists(SESSION_FILE):
     cl.load_settings(SESSION_FILE)
@@ -27,14 +25,12 @@ except:
     cl.login(USERNAME, PASSWORD)
     cl.dump_settings(SESSION_FILE)
 
-# --- PEGAR ANIME ALEATÓRIO ---
 def get_random_anime():
     url = "https://api.jikan.moe/v4/anime"
     params = {"page": random.randint(1, 100), "limit": 1}
     response = requests.get(url, params=params).json()
     return response["data"][0]
 
-# --- CRIAR POSTER ---
 def create_poster(anime):
     title = anime["title"]
     score = anime.get("score", "N/A")
@@ -58,13 +54,10 @@ def create_poster(anime):
 
     draw = ImageDraw.Draw(polaroid_card)
     text_color = (0, 0, 0)
-
-    # --- USANDO FONTES PADRÃO ---
     font_title_bold = ImageFont.load_default()
     font_info = ImageFont.load_default()
     font_info_bold = ImageFont.load_default()
 
-    # Ajuste do título
     text_start_y = IMAGE_HEIGHT + (CARD_PADDING * 1.5)
     padding_x = CARD_PADDING
 
@@ -85,11 +78,41 @@ def create_poster(anime):
     polaroid_card.save(path, "JPEG")
     return path, title, score
 
-# --- HASHTAGS ---
 def create_hashtags(title):
     keywords = ["anime","otaku","manga","japan","weeb","animes","cosplay","otakulife","animesbr","instaanime","animelover"]
     title_clean = title.replace(" ", "").replace("-", "").replace(":", "")
     hashtags = [f"#{title_clean}", f"#{title_clean}Anime"] + [f"#{k}" for k in random.sample(keywords, 6)]
     return " ".join(hashtags)
 
-# --- EXEC
+def job():
+    try:
+        anime = get_random_anime()
+        path, title, score = create_poster(anime)
+        hashtags = create_hashtags(title)
+        caption = f"{title}\n⭐ Nota: {score}\n\n{hashtags}"
+        cl.photo_upload(path, caption)
+        print(f"✅ Postado: {title} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    except Exception as e:
+        print(f"❌ Erro no job: {e}")
+
+def print_next_run():
+    if schedule.get_jobs():
+        next_run = schedule.get_jobs()[0].next_run
+        remaining = next_run - datetime.now()
+        hours, remainder = divmod(remaining.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"🕒 Próximo post em: {hours}h {minutes}m {seconds}s")
+
+schedule.every(6).hours.do(job)
+
+print(f"🕒 Script iniciado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+job()
+
+while True:
+    try:
+        schedule.run_pending()
+        print_next_run()
+        time.sleep(60)
+    except Exception as e:
+        print(f"❌ Erro no loop principal: {e}")
+        time.sleep(60)
