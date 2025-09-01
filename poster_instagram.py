@@ -6,9 +6,9 @@ from instagrapi import Client
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import schedule
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# --- CONFIGURAÇÕES VIA VARIÁVEIS DE AMBIENTE ---
+# --- CONFIGURAÇÕES ---
 USERNAME = os.environ.get("USERNAME")
 PASSWORD = os.environ.get("PASSWORD")
 SESSION_FILE = "session.json"
@@ -27,15 +27,14 @@ except:
     cl.login(USERNAME, PASSWORD)
     cl.dump_settings(SESSION_FILE)
 
-# --- FUNÇÃO PARA PEGAR ANIME ALEATÓRIO ---
+# --- PEGAR ANIME ALEATÓRIO ---
 def get_random_anime():
     url = "https://api.jikan.moe/v4/anime"
     params = {"page": random.randint(1, 100), "limit": 1}
     response = requests.get(url, params=params).json()
-    anime = response["data"][0]
-    return anime
+    return response["data"][0]
 
-# --- CRIAR POSTER ESTILO POLAROID ---
+# --- CRIAR POSTER ---
 def create_poster(anime):
     title = anime["title"]
     score = anime.get("score", "N/A")
@@ -59,84 +58,38 @@ def create_poster(anime):
 
     draw = ImageDraw.Draw(polaroid_card)
     text_color = (0, 0, 0)
-    try:
-        font_title_bold = ImageFont.truetype("arialbd.ttf", 90)
-        font_info = ImageFont.truetype("arial.ttf", 40)
-        font_info_bold = ImageFont.truetype("arialbd.ttf", 40)
-    except IOError:
-        font_title_bold = ImageFont.load_default()
-        font_info = ImageFont.load_default()
-        font_info_bold = ImageFont.load_default()
 
+    # --- USANDO FONTES PADRÃO ---
+    font_title_bold = ImageFont.load_default()
+    font_info = ImageFont.load_default()
+    font_info_bold = ImageFont.load_default()
+
+    # Ajuste do título
     text_start_y = IMAGE_HEIGHT + (CARD_PADDING * 1.5)
     padding_x = CARD_PADDING
 
-    # Ajuste responsivo do título
-    max_title_width = IMAGE_WIDTH
-    if year:
-        max_title_width -= (font_info.getlength(str(year)) + 20)
-    title_font_size = 90
-    font_title_bold = ImageFont.truetype("arialbd.ttf", title_font_size)
-    while font_title_bold.getlength(title.upper()) > max_title_width:
-        title_font_size -= 5
-        if title_font_size <= 40:
-            break
-        font_title_bold = ImageFont.truetype("arialbd.ttf", title_font_size)
-
     draw.text((padding_x, text_start_y), title.upper(), font=font_title_bold, fill=text_color)
     if year:
-        draw.text(
-            (padding_x + font_title_bold.getlength(title.upper()) + 20, text_start_y + font_title_bold.size - font_info.size - 5),
-            str(year), font=font_info, fill=text_color
-        )
+        draw.text((padding_x + 10, text_start_y + 10), str(year), font=font_info, fill=text_color)
 
-    y_pos = text_start_y + font_title_bold.size + 40
+    y_pos = text_start_y + 30
     draw.text((padding_x, y_pos), "genre", font=font_info_bold, fill=text_color)
-    draw.text((padding_x + 160, y_pos), ", ".join(genres), font=font_info, fill=text_color)
+    draw.text((padding_x + 60, y_pos), ", ".join(genres), font=font_info, fill=text_color)
 
-    y_pos += font_info.size + 20
+    y_pos += 20
     draw.text((padding_x, y_pos), "directed by", font=font_info_bold, fill=text_color)
-    draw.text((padding_x + 240, y_pos), director, font=font_info, fill=text_color)
+    draw.text((padding_x + 100, y_pos), director, font=font_info, fill=text_color)
 
     clean_title = "".join([c if c.isalnum() else "_" for c in title])[:30]
     path = os.path.join(IMAGE_DIR, f"{clean_title}_{int(time.time())}.jpg")
     polaroid_card.save(path, "JPEG")
     return path, title, score
 
-# --- CRIAR HASHTAGS ---
+# --- HASHTAGS ---
 def create_hashtags(title):
-    keywords = [
-        "anime", "otaku", "manga", "japan", "weeb", "animes", "cosplay",
-        "otakulife", "animesbr", "instaanime", "animelover"
-    ]
+    keywords = ["anime","otaku","manga","japan","weeb","animes","cosplay","otakulife","animesbr","instaanime","animelover"]
     title_clean = title.replace(" ", "").replace("-", "").replace(":", "")
     hashtags = [f"#{title_clean}", f"#{title_clean}Anime"] + [f"#{k}" for k in random.sample(keywords, 6)]
     return " ".join(hashtags)
 
-# --- EXECUTAR POST ---
-def job():
-    anime = get_random_anime()
-    path, title, score = create_poster(anime)
-    hashtags = create_hashtags(title)
-    caption = f"{title}\n⭐ Nota: {score}\n\n{hashtags}"
-    cl.photo_upload(path, caption)
-    print(f"✅ Postado: {title} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-# --- FUNÇÃO PARA MOSTRAR TEMPO RESTANTE ---
-def print_next_run():
-    next_run = schedule.get_jobs()[0].next_run
-    remaining = next_run - datetime.now()
-    hours, remainder = divmod(remaining.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    print(f"🕒 Próximo post em: {hours}h {minutes}m {seconds}s")
-
-# --- AGENDAR EXECUÇÃO A CADA 6 HORAS ---
-schedule.every(6).hours.do(job)
-
-print(f"🕒 Script iniciado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-job()  # roda imediatamente na primeira vez
-
-while True:
-    schedule.run_pending()
-    print_next_run()
-    time.sleep(60)  # verifica a cada minuto
+# --- EXEC
