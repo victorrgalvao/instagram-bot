@@ -11,7 +11,13 @@ USERNAME = os.environ.get("USERNAME")
 PASSWORD = os.environ.get("PASSWORD")
 SESSION_FILE = "session.json"
 IMAGE_DIR = "images"
+FONT_DIR = "fonts"
 os.makedirs(IMAGE_DIR, exist_ok=True)
+os.makedirs(FONT_DIR, exist_ok=True)
+
+# Fontes incluídas no projeto
+FONT_BOLD_PATH = os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf")
+FONT_REGULAR_PATH = os.path.join(FONT_DIR, "DejaVuSans.ttf")
 
 # --- LOGIN ---
 cl = Client()
@@ -45,6 +51,7 @@ def create_poster(anime):
     img_data = requests.get(image_url).content
     anime_img = Image.open(BytesIO(img_data)).convert("RGB")
 
+    # Configurações do cartão polaroid
     POLAROID_WIDTH = 1080
     POLAROID_HEIGHT = 1350
     POLAROID_BG_COLOR = (239, 239, 239)
@@ -57,12 +64,17 @@ def create_poster(anime):
 
     draw = ImageDraw.Draw(polaroid_card)
     text_color = (0, 0, 0)
+
+    # Carregar fontes com fallback
     try:
-        font_title_bold = ImageFont.truetype("arialbd.ttf", 90)
-        font_info = ImageFont.truetype("arial.ttf", 40)
-        font_info_bold = ImageFont.truetype("arialbd.ttf", 40)
-    except IOError:
+        font_title_bold = ImageFont.truetype(FONT_BOLD_PATH, 90)
+    except OSError:
         font_title_bold = ImageFont.load_default()
+
+    try:
+        font_info = ImageFont.truetype(FONT_REGULAR_PATH, 40)
+        font_info_bold = ImageFont.truetype(FONT_BOLD_PATH, 40)
+    except OSError:
         font_info = ImageFont.load_default()
         font_info_bold = ImageFont.load_default()
 
@@ -74,17 +86,21 @@ def create_poster(anime):
     if year:
         max_title_width -= (font_info.getlength(str(year)) + 20)
     title_font_size = 90
-    font_title_bold = ImageFont.truetype("arialbd.ttf", title_font_size)
-    while font_title_bold.getlength(title.upper()) > max_title_width:
-        title_font_size -= 5
-        if title_font_size <= 40:
-            break
-        font_title_bold = ImageFont.truetype("arialbd.ttf", title_font_size)
+    try:
+        font_title_bold = ImageFont.truetype(FONT_BOLD_PATH, title_font_size)
+        while font_title_bold.getlength(title.upper()) > max_title_width:
+            title_font_size -= 5
+            if title_font_size <= 40:
+                break
+            font_title_bold = ImageFont.truetype(FONT_BOLD_PATH, title_font_size)
+    except OSError:
+        font_title_bold = ImageFont.load_default()
 
     draw.text((padding_x, text_start_y), title.upper(), font=font_title_bold, fill=text_color)
     if year:
         draw.text(
-            (padding_x + font_title_bold.getlength(title.upper()) + 20, text_start_y + font_title_bold.size - font_info.size - 5),
+            (padding_x + font_title_bold.getlength(title.upper()) + 20,
+             text_start_y + font_title_bold.size - font_info.size - 5),
             str(year), font=font_info, fill=text_color
         )
 
